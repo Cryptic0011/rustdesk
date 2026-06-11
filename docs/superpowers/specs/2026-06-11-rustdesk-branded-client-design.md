@@ -84,17 +84,33 @@ NAT prevents them.
 - Fork `rustdesk/rustdesk` → `Cryptic0011/rustdesk`; work on branch
   `roofingpros`.
 - **Branding diff** (kept deliberately small for future upstream rebases):
-  - App display name → "Roofing Pros USA" (Flutter UI strings/config,
-    `app_name`).
-  - Icons: regenerate all required sizes (Windows `.ico`, macOS `.icns`,
-    Flutter assets, tray icons) from the 512×512 logo into `res/` and
-    `flutter/` asset locations.
-- **Server config baked at build time** via the officially supported env vars
-  `RENDEZVOUS_SERVER` (DDNS hostname) and `RS_PUB_KEY` (server public key),
-  stored as GitHub Actions **secrets** — never committed. Hardcoding hides
-  the custom-server settings UI, so users cannot misconfigure it.
-- **Build:** trigger the fork's existing `flutter-build` GitHub Actions
-  workflow; collect Windows `.exe` installer and macOS `.dmg` artifacts.
+  - Window titles (`flutter/lib/common.dart` `getWindowName`), main-window
+    brand text (`flutter/lib/desktop/widgets/tabbar_widget.dart:644`),
+    Windows file properties (`flutter/windows/runner/Runner.rc`
+    ProductName/FileDescription), macOS Dock/Finder name (Info.plist
+    `CFBundleDisplayName`) → "Roofing Pros USA". `APP_NAME` and
+    `PRODUCT_NAME` stay "RustDesk" (they drive config paths, service
+    integration, and CI dmg packaging).
+  - Icons: regenerate Windows `.ico`s, macOS `.icns`, tray icon, and an
+    in-app `flutter/assets/logo.png` from the 512×512 logo.
+  - **Accepted branding limitations** (internals, per non-goals): Start
+    Menu shortcut / install dir / `.app` filename / Windows service remain
+    "RustDesk"; macOS menu-bar tray glyph stays stock (it renders as a
+    monochrome template, which the full-color logo can't become); the small
+    in-app `icon.svg` glyph stays stock (vector source unavailable).
+- **Server config baked at build time** by editing the compile-time
+  constants `RENDEZVOUS_SERVERS` and `RS_PUB_KEY` in
+  `libs/hbb_common/src/config.rs:120-121` (verified: no env-var injection
+  mechanism exists). Since `hbb_common` is a submodule, it is forked too
+  (`Cryptic0011/hbb_common`) and the submodule repointed. The committed
+  values are the hostname and the server's *public* key — safe to publish;
+  the secret key never leaves the Synology.
+- **Build:** a trimmed `custom-client.yml` workflow (windows-x86_64 +
+  macOS jobs copied from `flutter-build.yml`, release-publish steps
+  removed, `workflow_dispatch` trigger); collect Windows `.exe` installer
+  and macOS `.dmg` artifacts from the run. With no signing secrets
+  configured, signing steps self-skip and unsigned artifacts build cleanly
+  (verified in workflow conditions).
 - License note: RustDesk is AGPL-3.0; the fork stays public on GitHub, which
   satisfies source availability.
 
