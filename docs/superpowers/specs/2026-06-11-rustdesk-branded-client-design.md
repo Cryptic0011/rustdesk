@@ -29,7 +29,8 @@ access. Tailscale-per-machine and RustDesk Pro were rejected (cost/hassle).
 | Topic | Decision |
 |---|---|
 | Server hosting | Keep Synology Docker container (bot-hosting.net is a Discord-bot host; cannot run RustDesk) |
-| Reachability | Office router port-forward + DDNS hostname |
+| Reachability | Meraki MX port-forward rules + DNS A record on static office IP |
+| Office WAN | Static public IP `97.68.138.154/29` (Spectrum) on MX Internet 1 — no CGNAT, no DDNS needed |
 | Branding depth | Display name + logo only |
 | Client platforms | Windows + macOS |
 | Build method | Fork `rustdesk/rustdesk`, GitHub Actions CI (GitHub account: `Cryptic0011`) |
@@ -40,24 +41,31 @@ access. Tailscale-per-machine and RustDesk Pro were rejected (cost/hassle).
 
 ```
 Home laptop (branded client)
-        │  remote.roofingprosusa-fl.com / xxx.synology.me
+        │  remote.roofingprosusa-fl.com → 97.68.138.154 (static)
         ▼
-Office router ── forwards TCP 21115-21117, UDP 21116 ──► Synology 192.168.0.200
-                                                          └─ Docker: hbbs (ID/rendezvous) + hbbr (relay)
+Meraki MX ── port forwards TCP 21115-21117, UDP 21116 ──► Synology 192.168.0.200
+                                                           └─ Docker: hbbs (ID/rendezvous) + hbbr (relay)
 Office desktops (stock clients, still pointed at 192.168.0.200) ──► same hbbs/hbbr
 ```
 
 Direct (peer-to-peer) connections are attempted first; `hbbr` relays when
 NAT prevents them.
 
-## Component 1: Server exposure (Synology + router)
+## Component 1: Server exposure (Synology + Meraki MX)
 
-- **Port forwards** on the office router → `192.168.0.200`:
-  TCP 21115, 21116, 21117 and UDP 21116. Nothing else.
-- **Hostname:** enable Synology DDNS (free `*.synology.me` name). Optionally
-  CNAME `remote.roofingprosusa-fl.com` → the synology.me name. The hostname
-  (not the raw IP) is what gets baked into clients, so a future ISP/IP change
-  requires no rebuild.
+- **Port forwards** in the Meraki Dashboard (dashboard.meraki.com →
+  Security & SD-WAN → Configure → Firewall → Port forwarding rules), each
+  with Uplink = Internet 1, LAN IP = `192.168.0.200`, Allowed remote IPs =
+  `any`: TCP 21115, TCP 21116, UDP 21116, TCP 21117. Nothing else.
+  Requires Dashboard write access (the local `*.devices.meraki.direct`
+  status page cannot configure forwarding).
+- **Hostname:** DNS A record `remote.roofingprosusa-fl.com → 97.68.138.154`
+  (office IP is static, so no DDNS). The hostname (not the raw IP) is what
+  gets baked into clients, so a future ISP/IP change is a DNS edit, not a
+  client rebuild.
+- **Hairpin NAT:** Meraki MX enables hairpin routing for port-forward rules
+  by default, so in-office machines can use the public hostname too —
+  verified in Meraki documentation; confirmed during testing anyway.
 - **Key reuse:** copy the existing public key from the container data dir
   (`id_ed25519.pub`) so current installs keep trusting the server.
 - **Hardening** (container env/args): require the key (`-k _`) and set
@@ -95,9 +103,9 @@ NAT prevents them.
 1. Test installers on one Windows machine and one Mac from a phone hotspot
    (true outside-network test).
 2. **Hairpin-NAT check:** from inside the office, connect via the public
-   hostname. If the router lacks NAT loopback, add a DNS override on the
-   local network (Synology DNS Server or router DNS) mapping the hostname →
-   `192.168.0.200`. Documented as a contingency step, not a blocker.
+   hostname. Meraki MX hairpins port-forwarded traffic by default, so this
+   is expected to pass; if it somehow fails, the contingency is a local DNS
+   override mapping the hostname → `192.168.0.200`.
 3. Share installers via SharePoint/OneDrive (M365 tenant already in use).
 4. Existing stock installs keep working (same server, same key); machines
    migrate to the branded build opportunistically. Machine IDs persist across
@@ -106,12 +114,10 @@ NAT prevents them.
 
 ## Error handling / failure modes
 
-- **Server unreachable from outside:** verify in order — DDNS resolves to
-  office WAN IP → router forwards hit the Synology → container ports
-  listening. Each step has a one-line test in the implementation plan.
-- **CGNAT discovered** (DDNS name resolves to an IP that differs from the
-  router's WAN IP): fall back to the cheap-VPS path; client rebuild is a
-  secrets change + re-run of CI because the hostname is the only coupling.
+- **Server unreachable from outside:** verify in order — hostname resolves
+  to `97.68.138.154` → MX forwarding rules hit the Synology → container
+  ports listening. Each step has a one-line test in the implementation plan.
+  (CGNAT ruled out: the MX uplink has a static public /29.)
 - **Unsigned-app prompts:** macOS right-click → Open (first launch only);
   Windows SmartScreen "More info → Run anyway". Include a one-paragraph
   user-facing install note alongside the installers.
