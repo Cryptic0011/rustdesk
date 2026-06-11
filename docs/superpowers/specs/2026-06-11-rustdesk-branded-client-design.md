@@ -41,7 +41,7 @@ access. Tailscale-per-machine and RustDesk Pro were rejected (cost/hassle).
 
 ```
 Home laptop (branded client)
-        │  remote.roofingprosusa-fl.com → 97.68.138.154 (static)
+        │  rpremote.builtbyflux.com → 97.68.138.154 (static)
         ▼
 Meraki MX ── port forwards TCP 21115-21117, UDP 21116 ──► Synology 192.168.0.200
                                                            └─ Docker: hbbs (ID/rendezvous) + hbbr (relay)
@@ -59,7 +59,7 @@ NAT prevents them.
   `any`: TCP 21115, TCP 21116, UDP 21116, TCP 21117. Nothing else.
   Requires Dashboard write access (the local `*.devices.meraki.direct`
   status page cannot configure forwarding).
-- **Hostname:** DNS A record `remote.roofingprosusa-fl.com → 97.68.138.154`
+- **Hostname:** DNS A record `rpremote.builtbyflux.com → 97.68.138.154`
   (office IP is static, so no DDNS). The hostname (not the raw IP) is what
   gets baked into clients, so a future ISP/IP change is a DNS edit, not a
   client rebuild.
